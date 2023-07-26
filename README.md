@@ -471,6 +471,8 @@ PCB
 
 ### 프로세스 생성(Process Creation)
 
+Copy-on-write (CoW)
+
 - 부모 프로세스(Parent process)가 자식 프로세스(children process) 생성
 - 프로세스의 트리(계층 구조)형성
 - 프로세스는 자원을 필요로 함
@@ -509,7 +511,424 @@ PCB
 
 ### fork() 시스템 콜
 
+- A process is created by the fork() system call.
+
+  - creates a new address space that is a duplicate of the caller
+
+  ```c
+  int main()
+  {
+    int pid;
+    pid = fork();
+    if (pid == 0) /* this is child*/
+      printf("\n Hello, I am child!\n");
+    else if (pid > 0) /* this is parent*/
+      printf("\n Hello, I am parent!\n")
+  }
+
+  ```
+
 ### exec() 시스템 콜
+
+- A process can execute a different program by the exec() system call.
+  - replaces the memory image of the caller with a new program.
+
+```c
+int main()
+{
+  int pid;
+  pid = fork();
+  if (pid == 0) /* this  is child */
+  {
+    printf("\n Hello, I am child! Now I'll run date\n");
+    execlp("/bin/date", "/bin/date", (char *)0);
+  }
+  else if (pid > 0) /* this is parent*/
+    printf("\n Hello, I am parent!\n");
+}
+
+```
+
+```c
+int main()
+{
+  printf("1");
+  execlp("echo", "echo", "3", (char *) 0); /* 1 , echo 출력*/
+  printf("2");
+}
+
+```
+
+### wait() 시스템 콜
+
+- 프로세스 A가 wait() 시스템 콜을 호출하면
+  - 커널은 child가 종료될 때까지 프로세스 A를 sleep 시킨다. (block 상태)
+  - Child process가 종료되면 커널은 프로세스 A를 깨운다. (ready 상태)
+
+```c
+main()
+{
+  int childPID;
+  s1;
+
+  childPID = fork();
+
+  if(childPID == 0 )
+    <code for child process>
+  else {
+    wait();
+  }
+
+  s2;
+}
+
+```
+
+### exit() 시스템 콜
+
+- 프로세스의 종료
+
+  - 자발적 종료
+
+    - 마지막 statement 수행 후 exit() 시스템 콜을 통해
+    - 프로그램에 명시적으로 적어주지 않아도 main함수가 리턴되는 위치에 컴파일러가 넣어줌
+
+  - 비자발적 종료(외부에서 종료시킴, 부모프로세스나 사람이 종료 시킴)
+    - 부모 프로세스가 자식 프로세스를 강제 종료시킴
+      - 자식 프로세스가 한계치를 넘어서는 자원 요청
+      - 자식에게 할당된 태스크가 더 이상 필요하지 않음
+    - 키보드로 kill, break 등을 친 경우
+    - 부모가 종료하는 경우
+      - 부모 프로세스가 종료하기 전에 자식들이 먼저 종료됨.
+
+### 프로세스와 관련한 시스템 콜
+
+- fork() create a child(copy)
+
+- exec() overlay new image
+
+- wait() sleep until child is done
+
+- exit() frees all the resources, notify parent
+
+### 프로세스간 협력
+
+- 독립적 프로세스(Independent process)
+
+  - 프로세스는 각자의 주소 공간을 가지고 수행되므로 원칙적으로 하나의 프로세스는 다른 프로세스의 수행에 영향을 미치지 못함
+
+- 협력 프로세스(Cooperating process)
+
+  - 프로세스 협력 메커니즘을 통해 하나의 프로세스가 다른 프로세스의 수행에 영향을 미칠 수 있음
+
+- 프로세스간 협력 메커니즘(IPC: Interprocess Communication)
+
+  - 메시지를 전달하는 방법
+    - message passing : 커널을 통해 메시지 전달
+  - 주소 공간을 공유하는 방법
+
+    - shared memory : 서로 다른 프로세스 간에도 일부 주소공간을 공유하게 하는 shared memory 메커니즘이 있음
+
+    - thread : thread는 사실상 하나의 프로세스이므로 프로세스 간 협력으로\* 보기는 어렵지만 동일한 프로세스를 구성하는 thread간에는 주소공간을 공유하므로 협력이 가능
+
+### Message Passing
+
+- Message system
+
+  - 프로세스 사이에 공유 변수(shared variable)를 일체 사용하지 않고 통신하는 시스템
+
+- Direct Communication
+
+  - 통신하려는 프로세스의 이름을 명시적으로 표시
+  - Process P >>>> Process Q
+    Send (Q, message) Receive(P, message)
+
+- Indirect Communication
+  - mailbox (또는 port)를 통해 메시지를 간접 전달
+    Process P >> Mailbox >> M Process Q
+    Send (M, message) Receive(M, message)
+
+### CPU and I/O Bursts in Program Execution
+
+CPU burst : load store, add store, read from file
+I/O burst : wait for I/O
+CPU burst : store increment, index, write to file
+I/O burst : wait for I/O
+CPU burst : load store, add store, read from file
+I/O burst : wait for I/O
+
+### CPU-burst Time의 분포
+
+- 여러 종류의 job(=process)가 섞여 있기 때문에 CPU 스케줄링이 필요하다.
+- interactive job에게 적절한 response 제공 요망
+- CPU와 I/O 장치 시스템 자원을 골고루 효율적으로 사용
+
+### 프로세스의 특성 분류
+
+- 프로세스는 그 특성에 따라 다음 두 가지로 나눔
+
+  - I/O-bound process
+
+    - CPU를 잡고 계산하는 시간보다 I/O에 많은 시간이 필요한 job
+    - (many short CPU burst)
+
+  - CPU-bound process
+    - 계산 위주의 job
+    - few very long CPU bursts
+
+### CPU Scheduler & Dispatcher
+
+- CPU Scheduler (운영체제코드, CPU 줄 프로세스를 고름)
+
+  - Ready 상태의 프로세스 중에서 이번에 CPU를 줄 프로세스를 고른다.
+
+- Dispatcher (운영체제코드, 선택된 프로세스에게 넘김)
+
+  - CPU의 제어권을 CPU scheduler에 의해 선택된 프로세스에게 넘긴다.
+  - 이 과정을 context switch(문맥 교환)이라고 한다.
+
+* CPU 스케줄링이 언제 필요한가 ? (다음을 참고)
+
+- CPU 스케줄링이 필요한 경우는 프로세스에게 다음과 같은 상태 변화가 있는 경우이다.
+
+  - Running -> Blocked (예 : I/O 요청하는 시스템 콜)
+  - Running -> Ready (예 : 할당시간만료 로 timer interrupt)
+  - Blocked -> Ready (예 : I/O 완료 후 인터럽트)
+  - Terminate
+
+- 비선점형 1 ~ 4에서의 스케줄링은 nonpreemptive(=강제로 빼앗지 않고 자진 반납)
+- 선점형 All other scheduling is preemptive(=강제로 빼앗음)
+
+### Scheduling Criteria
+
+#### Performance Index ( = Performance Measure, 성능 척도)
+
+- CPU utilization(이용률) - 시스템 입장의 성능, 척도
+
+  - keep the CPU as busy as possible
+
+- Throughput(처리량) - 시스템 입장의 성능, 척도
+
+  - of processes that complete their execution per time unit
+
+- Turnaround time (소요시간, 반환시간) - 사용자 입장의 성능, 척도
+
+  - amount of time to execute a particular process
+
+- Waiting time (대기 시간) - 사용자 입장의 성능, 척도
+
+  - amount of time a process has been waiting in the ready queue
+
+- Response time (응답 시간) - 사용자 입장의 성능, 척도
+  - amount of time it takes from when a request was submitted until the first response is produced. not output (for time-sharing environment)
+
+### Scheduling Algorithms
+
+- FCFS (First-Come First-Served)
+- SJF (Shortest-Job-First)
+- SRTF (Shortest-Remaining-Time-First)
+- Priority Scheduling
+- RR (Round Robin)
+- Multilevel Queue
+- Multilevel Feedback Queue
+
+### FCFS (First-Come First-Served) (1)
+
+- 예시 : 화장실 스케줄링(변비 있는 사람이 앞에서 화장실을 점유하고 있으면 아래 예시와 같은 일이 벌어진다.)
+
+* 비선점형 스케줄링
+  (선착순으로 동작하기 때문에 좋은 스케줄링은 아니다. 앞의 선착순으로 도착한 프로그램의 waiting시간에 따라 전체 waiting시간에 영향을 많이 준다.)
+
+* Example
+
+  - Process Burst Time
+  - P1 24
+  - P2 3
+  - P3 3
+
+* 프로세스의 도착 순서
+* P1, P2, P3
+
+  - P1(0-24)
+  - P2(24-27)
+  - P3(27-30)
+
+* Wating time for P1 = 0; P2 = 24; P3 = 27
+* Average wating time : (0 + 24 + 27 )/3 = 17
+
+### FCFS (First-Come First-Served) (2)
+
+- 프로세스의 도착순서가 다음과 같다고 하자.
+- P2, P3, P1
+
+  - P1(0-3)
+  - P2(3-6)
+  - P3(6-30)
+
+- Waiting time for P1 = 6; P2 = 0; P3=3;
+- Average waiting time : (6 + 0 + 3) /3 =3
+- Much better than previous case
+- Convoy effect : short process behind long process
+
+### SJF (Shortest-Job-First)
+
+- 각 프로세스의 다음번 CPU burst time을 가지고 스케줄링에 활용
+- CPU burst time이 가장 짧은 프로세스를 제일 먼저 스케줄
+- Two schemes :
+  - Nonpreemptive 버전
+    - 일단 CPU를 잡으면 이번 CPU burst가 완료될때까지 CPU를 선점(preemption) 당하지 않음
+  - Preemptive 버전
+    - 현재 수행중인 프로세스의 남은 burst time보다 더 짧은 CPU burst time을 가지는 새로운 프로세스가 도착하면 CPU를 빼앗김
+    - 이 방법을 Shortest-Remaining-Time-First(SRTF)이라고도 부른다.
+- SJF is optimal
+  - 주어진 프로세스들에 대해 minimum average waiting time을 부정 (Preemptive 버전)
+
+### Example of Non-Preemptive SJF
+
+| Process | Arrival Time | Burst Time |
+| ------- | ------------ | ---------- |
+| P1      | 0.0          | 7          |
+| P2      | 2.0          | 4          |
+| P3      | 4.0          | 1          |
+| P4      | 5.0          | 4          |
+|         |              |            |
+
+- SJF (non-preemptive)
+  - P1(0-7)
+  - P3(7-8)
+  - P2(8-12)
+  - P4(12-16)
+- Average waiting time = (0 + 6 + 3 + 7)/4 = 4
+
+### Example of Preemptive SJF
+
+| Process | Arrival Time | Burst Time |
+| ------- | ------------ | ---------- |
+| P1      | 0.0          | 7          |
+| P2      | 2.0          | 4          |
+| P3      | 4.0          | 1          |
+| P4      | 5.0          | 4          |
+|         |              |            |
+
+- SJF (preemptive)
+  - P1(0-2)
+  - P2(2-4)
+  - P3(4-5)
+  - P2(5-7)
+  - P4(7-11)
+  - P1(11-16)
+- Average waiting time = (9 + 1 + 0 + 2)/4 = 3
+
+### Priority Scheduling (우선순위 스케줄링)
+
+- Priority number (integer) is associated with each process
+- hightest priority를 가진 프로세스에게 CPU 할당
+  (smallest integer = highest priority)
+  - Preemptive
+  - nonpreemptive
+- SJF는 일종의 Priority scheduling이다.
+  - priority = predicted next CPU burst time
+- Problem
+  - Starvation(기아 현상) low priority processes may never execute.
+- Solution
+  - Aging(노화) as time progresses increase the priority of the process.
+
+### 다음 CPU Burst Time의 예측
+
+- 다음번 CPU burst time을 어떻게 알 수 있는가 ? (input data, branch, user...)
+- 추정(estimate)만이 가능하다.
+- 과거의 CPU burst time을 이용해서 추정(예측)
+  (exponential averaging)
+  1. t[n](n번째 실제 CPU 사용시간) = actuallength of n^CPU burst
+  2. r[n+1](타우, n+1번째 CPU 사용을 예측한 시간) - predicted value for the next CPU burst
+  3. a(알파), 0 <= a(알파) <= 1
+  4. Define : r[n+1] = a[tn] + (1-a)r[n]
+
+### Round Robin (RR)
+
+- 각 프로세스는 동일한 크기의 할당 시간(time quantum)을 가짐 (일반적으로 10-100 milliseconds)
+- 할당 시간이 지나면 프로세스는 선점(preempted)당하고 ready queue의 제일 뒤에 가서 다시 줄을 선다.
+- n개의 프로세스가 ready queue에 있고 할당 시간이 q time unit인 경우 각 프로세스는
+  최대 q time unit 단위로 CPU 시간의 1/n을 얻는다.
+
+  - 어떤 프로세스도 (n-1)q time unit 이상 기다리지 않는다.
+
+- Performance
+  - q large -> FCFS
+  - q small -> context switch 오버헤드가 커진다.
+
+### Example : RR with Time Quantum = 20
+
+| Process | Burst Time |
+| ------- | ---------- |
+| P1      | 53         |
+| P2      | 17         |
+| P3      | 68         |
+| P4      | 24         |
+|         |            |
+
+- The Gantt chart is :
+
+| P1   | P2    | P3    | P4    | P1    | P3     | P4      | P1      | P3      | P3      |
+| ---- | ----- | ----- | ----- | ----- | ------ | ------- | ------- | ------- | ------- |
+| 0-20 | 20-37 | 37-57 | 57-77 | 77-97 | 97-117 | 117-121 | 121-134 | 134-154 | 154-162 |
+|      |       |       |       |       |        |         |         |         |         |
+
+- 일반적으로 SJF보다 average turnaround time이 길지만 response time은 더 짧다.
+
+### Multilevel Queue
+
+- Ready Queue를 여러 개로 분할
+  - foreground (interactive)
+  - background (batch - no human interaction)
+- 각 큐는 독립적인 스케줄링 알고리즘을 가짐
+  - foreground - RR
+  - background - FCFS
+- 큐에 대한 스케줄링이 필요
+  - Fixed priority scheduling
+    - serve all from foreground then from background
+    - Possibility of starvation
+  - Time slice
+    - 각 큐에 CPU time을 적절한 비율로 할당
+    - Eg., 80% to foreground in RR, 20% to background in FCFS
+
+### Multilevel Queue (priority)
+
+#### hightest priority
+
+1. system processes
+2. interactive processes
+3. interactive editing processes
+4. batch processes
+5. student processes
+
+#### lowest priority
+
+### Multilevel Feedback Queue
+
+- 프로세스가 다른 큐로 이동 가능
+- 에이징(aging)을 이와 같은 방식으로 구현할 수 있다.
+- Multilevel-feedback-queue scheduler를 정의하는 파라미터들
+  - Queue의 수
+  - 각 큐의 scheduling algorithm
+  - Process를 상위 큐로 보내는 기준
+  - Process를 하위 큐로 내쫓는 기준
+  - 프로세스가 CPU 서비스를 받으려 할 때 들어갈 큐를 결정하는 기준
+
+### Examples of Multilevel Feedback Queue
+
+- Three queues
+
+  - Q[0] - time quantum 8 milliseconds
+  - Q[1] - time quantum 16 milliseconds
+  - Q[2] - FCFS
+
+- Scheduling
+  - new job이 queue Q[0]로 들어감
+  - CPU를 잡아서 할당 시간 8 milliseconds 동안 수행됨
+  - 8 milliseconds 동안 다 끝내지 못했으면 queue Q[1]ㅡ로 내려감
+  - Q[1]에 줄서서 기다렸다가 CPU를 잡아서 16ms동안 수행됨
+  - 16ms에 끝내지 못한 경우 queue Q[2]로 쫓겨남
 
 ### 출처 : Kocw 이화여대 반효경 교수 "운영체제" 강의 첨부
 
