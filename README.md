@@ -1034,6 +1034,8 @@ multiprocessor의 경우 interrupt enable/disable로 해결되지 않음
 - 방법1. 한번에 하나의 CPU만이 커널에 들어갈 수 있게 하는 방법
 - 방법2. 커널 내부에 있는 각 공유 데이터에 접근할 때마다 그 데이터에 대한 lock / unlock을 하는 방법
 
+# 6. Process Synchronization 2
+
 ### Process Synchronization 문제
 
 - 공유 데이터(shared data)의 동시 접근(concurrent access)는 데이터의 불일치(inconsistency)를 발생시킬 수 있다.
@@ -1168,6 +1170,128 @@ Process P[i]
           remainder section
         }
 ```
+
+# 6. Process Synchronization 3
+
+### Semaphores
+
+- 공유자원을 획득하고 반납하는 것을 처리해줌
+
+* 앞의 방식들을 추상화시킴
+* Semaphore S
+
+  - integer variable
+  - 아래의 두 가지 atomic 연산에 의해서만 접근 가능 (P 연산(공유데이터 획득), V 연산(공유데이터를 다 사용하고 반납하는 과정))
+
+  ```c
+  P(S) : while(S<=0) do no-op (i.e. wait)
+         S--;
+
+  If positive, decrement-&-enter.
+  Otherwise, wait until positive (busy-wait)
+
+  V(S) :
+        S++;
+  ```
+
+### Critical Section of n Processes
+
+```c
+Synchronization variable
+semaphore mutex; /* initially 1 : 1개가 CS에 들어갈 수 있다. */
+
+Process P[i]
+do {
+  P(mutex);   /* If positive, dec-&-enter,Otherwise, wait. */
+  critical section
+  V(mutex);   /*  Increment semaphore */
+  remainder section
+
+} while(1);
+```
+
+- busy-wait은 효율적이지 못함(=spin lock)
+- Block & Wakeup 방식의 구현 (=sleep lock) >> next page
+
+### Block / Wakeup Implementation
+
+- Semaphore를 다음과 같이 정의
+
+```c
+typedef struct
+{
+  int value; /* semaphore */
+  struct process *L; /* process wait queue */
+} semaphore;
+```
+
+- block과 wakeup을 다음과 같이 가정
+
+  - block : 커널은 block을 호출한 프로세스를 suspend시킴 이 프로세스의 PCB를 semaphore에 대한 wait queue에 넣음
+  - wakeup(P) : block된 프로세스 P를 wakeup 시킴 이 프로세스의 PCB를 ready queue로 옮김
+
+  Semaphore : value-L >> PCB >> PCB >> PCB
+
+### Implementation
+
+- block/wakeup version of P() & V()
+
+- Semaphore 연산이 이제 다음과 같이 정의됨
+
+```c
+P(S) : S.value--; /* prepare to enter */
+       if (S.value < 0 ) /* Oops, negative, I cannot enter */
+       {
+          add this process to S.L;
+          block();
+       }
+```
+
+```c
+V(S) : S.value++;
+       if (S.value <= 0 ) {
+          remove a process P from S.L;
+          wakeup(P);
+       }
+```
+
+### Which is better ?
+
+- Busy-wait v.s. Block/wakeup
+
+- Block/wakeup overhead v.s. Critical section 길이
+  - Critical section의 길이가 긴 경우 Block/Wakeup이 적당
+  - Critical section의 길이가 매우 짧은 경우 Block/Wakeup 오버헤드가 busy-wait 오버헤드보다 더 커질 수 있음
+  - 일반적으로는 Block/wakeup 방식이 더 좋음
+
+### Two Types of Semaphores
+
+- Counting semaphore
+
+  - 도메인이 0 이상인 임의의 정수값
+  - 주로 resource counting에 사용
+
+- Binary semaphore (=mutex)
+  - 0 또는 1 값만 가질 수 있는 semaphore
+  - 주로 mutual exclusion (lock/unlock) 사용
+
+### Deadlock and Starvation
+
+- Deadlock
+  - 둘 이상의 프로세스가 서로 상대방에 의해 충족될 수 있는 event를 무한히 기다리는 현상
+- S와 Q가 1로 초기화된 semaphore라 하자.
+
+```
+- P[0] P[1]
+- P(S); P(Q); 하나씩 차지.
+- P(Q); P(S); 상대방 것을 요구
+- ..... .....
+- V(S); V(Q); 여기와야 release함
+- V(Q); V(S);
+```
+
+- Starvation
+  - indefinite blocking. 프로세스가 suspend된 이유에 해당하는 세마포어 큐에서 빠져나갈 수 없는 현상.
 
 ### 출처 : Kocw 이화여대 반효경 교수 "운영체제" 강의 첨부
 
