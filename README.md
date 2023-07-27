@@ -648,6 +648,8 @@ main()
     Process P >> Mailbox >> M Process Q
     Send (M, message) Receive(M, message)
 
+# 5. CPU Scheduling
+
 ### CPU and I/O Bursts in Program Execution
 
 CPU burst : load store, add store, read from file
@@ -929,6 +931,243 @@ I/O burst : wait for I/O
   - 8 milliseconds 동안 다 끝내지 못했으면 queue Q[1]ㅡ로 내려감
   - Q[1]에 줄서서 기다렸다가 CPU를 잡아서 16ms동안 수행됨
   - 16ms에 끝내지 못한 경우 queue Q[2]로 쫓겨남
+
+### Multiple-Processor Scheduling
+
+- CPU가 여러 개인 경우 스케줄링은 더욱 복잡해짐
+- Homogeneous processor인 경우
+  - Queue에 한줄로 세워서 각 프로세서가 알아서 꺼내가게 할 수 있다.
+  - 반드시 특정 프로세서에서 수행되어야 하는 프로세스가 있는 경우에는 문제가 더 복잡해짐
+- Load sharing
+  - 일부 프로세서에 job이 몰리지 않도록 부하를 적절히 공유하는 메커니즘 필요
+  - 별개의 큐를 두는 방법 VS 공동 큐를 사용하는 방법
+- Symmetric Multiprocessing (SMP)
+  - 각 프로세서가 각자 알아서 스케줄링 결정
+- Asymmetric multiprocessing
+  - 하나의 프로세서가 시스템 데이터의 접근과 공유를 책임지고 나머지 프로세서는 거기에 따름
+
+### Real-Time Scheduling
+
+- Hard real-time systems
+  - Hard real-time task는 정해진 시간 안에 반드시 끝내도록 스케줄링해야 함
+- Soft real-time computing
+  - Soft real-time task는 일반 프로세스에 비해 높은 priority를 갖도록 해야 함
+
+### Thread Scheduling
+
+- Local Scheduling
+  - User level thread의 경우 사용자 수준의 thread library에 의해 어떤 thread를 스케줄할지 결정
+
+* Global Scheduling
+  - Kernel level thread의 경우 일반 프로세스와 마찬가지로 커널의 단기 스케줄러가 어떤 thread를 스케줄할지 결정
+
+### Algorithm Evaluation
+
+- Queueing models
+
+  - 확률 분포로 주어지는 arrival rate와 service rate등을 통해 각종 performance index 값을 계산
+
+- Implementation(구현) & Measurement(성능 측정)
+
+  - 실제 시스템에 알고리즘을 구현하여 실제 작업(workload)에 대해서 성능을 측정 비교
+
+- Simulation(모의 실험)
+  - 알고리즘을 모의 프로그램으로 작성 후 trace를 입력으로 하여 결과 비교
+
+# 6. Process Synchronization
+
+### Race Condition
+
+- S-box(Memory Address Space)를 공유하는 E-box(CPU Process)가 여럿 있는 경우 Race Condition의 가능성이 있음
+  - Multiprocessor system
+  - 공유메모리를 사용하는 프로세스들, 커널 내부데이터를 접근하는 루틴들 간
+    (예 : 커널모드 수행 중 인터럽트로 커널모드 다른 루틴 수행시)
+
+### OS에서 race condition은 언제 발생하는가 ?
+
+1. kernel 수행 중 인터럽트 발생 시
+2. Process가 system call을 하여 kernel mode로 수행중인데 context switch가 일어나는 경우
+3. Multiprocessor에서 shared memory 내의 kernel data
+
+### OS에서의 race condition(1/3)
+
+- interrupt handler vs kernel
+
+interrupt handler Count--
+kernel Count++
+(1. load, 2. Inc, 3. Store)
+
+커널이 어떤 작업 중에 있을 때 인터럽트 요청이 와도 기존 작업을 다 한뒤에 인터럽트
+처리 루틴으로 간다. 위와 같은 경우는 카운트가 1 증가함
+커널에서 Count++ 작업 중 인터럽트로 Count--가 들어올 떄의 상황
+
+- 커널모드 running 중 interrupt가 발생하여 인터럽트 처리루틴이 수행
+  - 양쪽 다 커널 코드이므로 kernel address space 공유
+
+### OS에서의 race condition(2/3)
+
+1. user mode
+2. System call
+3. kernel mode
+4. Return from kernel
+5. user mode
+6. System call
+7. kernel mode
+
+- 두 프로세스의 address space간에는 data sharing이 없음
+- 그러나 system call을 하는 동안에는 kernel address space의 data를 access하게 됨(share)
+- 이 작업 중간에 CPU를 preempt해가면 race condition 발생
+
+### If you preempt CPU while in kernel mode ...
+
+1. System call read()
+2. Time quantum expires & P[B] needs CPU. P[A]는 CPU를 preempt 당함 (while in kernel !)
+3. CPU 되돌려 받음
+
+- 해결책 : 커널모드에서 수행중일때는 CPU를 preempt하지 않음 커널모드에서 사용자 모드로 돌아갈 때 preempt
+
+### OS에서의 race condition(3/3)
+
+어떤 CPU가 마지막으로 count를 store했는가 ? >>> race condition
+multiprocessor의 경우 interrupt enable/disable로 해결되지 않음
+
+- 방법1. 한번에 하나의 CPU만이 커널에 들어갈 수 있게 하는 방법
+- 방법2. 커널 내부에 있는 각 공유 데이터에 접근할 때마다 그 데이터에 대한 lock / unlock을 하는 방법
+
+### Process Synchronization 문제
+
+- 공유 데이터(shared data)의 동시 접근(concurrent access)는 데이터의 불일치(inconsistency)를 발생시킬 수 있다.
+- 일관성(consistency)유지를 위해서는 협력 프로세스(cooperating process)간의 실행 순서(orderly execution)을 정해주는 메커니즘 필요
+
+- Race condition
+  - 여러 프로세스들이 동시에 공유데이터를 접근하는 상황
+  - 데이터의 최종 연산 결과는 마지막에 그 데이터를 다룬 프로세스에 따라 달라짐
+- race condition을 막기 위해서는 concurrent process는 동기화(synchronize)되어야 한다.
+
+### The Critical-Section Problem
+
+- n개의 프로세스가 공유 데이터를 동시에 사용하기를 원하는 경우
+- 각 프로세스의 code segment에는 공유데이터를 접근하는 코드인 critical section이 존재.
+- Problem
+  - 하나의 프로세스가 critical section에 있을 때 다른 모든 프로세스는 critical section에 들어갈 수 없어야 한다.
+
+### Initial Attempts to Solve Problem
+
+- 두 개의 프로세스가 있다고 가정 P[0], P[1]
+- 프로세스들의 일반적인 구조
+
+  ```c
+  do {
+    entry section
+    critical section
+    exit section
+    remainder section
+  }while(1);
+  ```
+
+* 프로세스들은 수행의 동기화(synchronize)를 위해 몇몇 변수를 공유할 수 있다.
+  > > synchronization variable
+
+### 프로그램적 해결법의 충족 조건
+
+- Mutual Exclusion (상호배제)
+
+  - 프로세스 Pi가 critical section 부분을 수행중이면 다른 모든 프로세스들은 그들의 critical section에 들어가면 안 된다.
+
+- Progress(진행)
+
+  - 아무도 critical section에 있지 않은 상태에서 critical section에 들어가고자 하는 프로세스가 있으면 critical section에 들어가게 해주어야 한다.
+
+- Bounded Waiting(유한 대기)
+
+  - 프로세스가 critical section에 들어가려고 요청한 후부터 그 요청이 허용될 때까지 다른 프로세스들이 critical section에 들어가는 횟수에 한계가 있어야 한다.
+
+- 가정
+  - 모든 프로세스의 수행 속도는 0보다 크다.
+  - 프로세스들 간의 상대적인 수행 속도는 가정하지 않는다.
+
+### Algorithm 1
+
+- Synchronization variable
+  int turn;
+  initially turn = 0; >> P[i] can enter its critical section if (turn == i)
+- Process P
+
+  ```c
+  do {
+    while (turn != 0); /* My turn ? */
+      critical section
+      turn = 1;        /* Now it's your turn */
+      remainder section
+  } while(1);
+
+  ```
+
+* Satisfies mutual exclusion, but not progress
+  - 즉, 과잉양보 : 반드시 교대로 들어가야만 함(swap-turn)
+    그가 turn을 내 값으로 바꿔줘야만 내가 들어갈 수 있음 특정 프로세스가
+    더 빈번히 criticial sectiovariables
+    - n에 들어가야 한다면 ?
+
+### Algorithm 2
+
+- Synchronization variables
+  - boolean flag[2];
+    initially flag [모두] = false; /_no one is in CS_/
+  - "P[1] ready to enter its critical section" (flag[i] == true)
+- Process P[i]
+
+  ```c
+  do {
+    flag[i] = true; /* Pretend I am in */
+    while (flag[j]); /* Is he also in ? then wait */
+    critical section
+    flag[i] = false ; /* I am out now */
+    remainder section
+  } while(1);
+  ```
+
+  - Satisfies mutual exclusion, but not progress requirement.
+  - 둘 다 2행까지 수행 후 끊임 없이 양보하는 상황 발생 가능
+
+### Algorithm 3 (Peterson's Algorithm)
+
+- Combined synchronization variables of algorithms 1 and 2
+- Process P[i]
+
+```c
+do {
+  flag [i] = true; /* My intention is to enter ... */
+  turn = j;        /* Set to his turn */
+  while(flag[j] && turn == j); /* wait only if ... */
+  critical section
+  flag[i] = false;
+  remainder section
+}while(1)
+```
+
+- Meets all three requirements; solves the critical section problem for two processes.
+- Busy Waiting!(=spin lock!) (계속 CPU와 memory를 쓰면서 wait)
+
+### Synchronization Hardware
+
+- 하드웨어적으로 Test & modify를 atomic하게 수행할 수 있도록 지원하는 경우 앞의 문제는 간단히 해결
+  - Test_and_set(a) 인스트럭션이 기존 값을 Read 하면서 새로 값을 설정하는 그런 기능을 한다.
+    (1.Read, 2.TRUE )
+- Mutual Exclusion with Test & Set
+
+```c
+Synchronization variable:
+       boolean lock = false;
+
+Process P[i]
+        do {
+          while (Test_and_Set(lock));
+          critical section
+          lock = false;
+          remainder section
+        }
+```
 
 ### 출처 : Kocw 이화여대 반효경 교수 "운영체제" 강의 첨부
 
