@@ -2046,6 +2046,163 @@ Each Philosopher:
   - 최소한의 메모리 이동으로 compactio하는 방법(매우 복잡한 문제)
   - Compaction은 프로세스의 주소가 실행 시간에 동적으로 재배치 가능한 경우에만 수행될 수 있다.
 
+### Implementation of Page Table
+
+- Page table은 main memory에 상주
+- Page-table base register (PTBR)가 page table을 가리킴
+- Page-table length register (PTLR)가 테이블 크기를 보관
+- 모든 메모리 접근 연산에는 2번의 memory access 필요
+- page table 접근 1번, 실제 data/instruction 접근 1번
+- 속도 향상을 위해 associative register 혹은 translation look-aside buffer (TLB)라 불리는 고속의
+  lookup hardware cache 사용
+
+### Associative Register
+
+- Associative registers (TLB) : parallel search가 가능
+  - TLB에는 page table 중 일부만 존재.
+- Address translation
+  - page table 중 일부가 associative register에 보관되어있음
+  - 만약 해당 page #가 associative register에 있는 경우 곧바로 frame#을 얻음
+  - TLB는 context switch 때 flush (remove old entries)
+
+### Effective Access Time
+
+- Associative register lookup time = 엡실론
+- memory cycle time = 1
+- Hit ratio = 알파
+  - associatvie register에서 찾아지는 비율
+- Effective Access Time(EAT)
+
+### Two-Level Page Table
+
+- 현재의 컴퓨터는 address space가 매우 큰 프로그램 지원
+  - 32 bit address 사용시 : 2^^32(4G)의 주소 공간
+    - page size가 4K시 1M개의 page table entry 필요
+    - 각 page entry가 4B시 프로세스당 4M의 page table 필요
+    - 그러나, 대부분의 프로그램은 4G의 주소 공간 중 지극히 일부분만 사용하므로 page table 공간이 심하게 낭비됨
+  - page table 자체를 page로 구성
+  - 사용되지 않는 주소 공간에 대한 outer page table의 엔트리 값은 NULL(대응하는 inner page table이 없음)
+
+### Two-Level Paging Example
+
+- logical address (on 32-bit machine with 4K page size)의 구성
+
+  - 20 bit의 page number
+  - 12 bit의 page offset
+
+- page table 자체가 page로 구성되기 때문에 page number는 다음과 같이 나뉜다.
+
+  - 10-bit의 page number.
+  - 10-bit의 page offset.
+
+- 따라서 logical address는 다음과 같다.
+  | page number | page offset |
+  | ----|----|
+  | p1 p2| d|
+  | 10 10 | 12|
+
+* P1은 outer page table의 index이고
+* P2는 outer page table의 page에서의 변위(displacement)
+
+### Multilevel Paging and Performance
+
+- Address space가 더 커지면 다단계 페이지 테이블 필요
+- 각 단계의 페이지 테이블이 메모리에 존재하므로 logical address의 physical address 변환에 더 많은 메모리 접근 필요
+- TLB를 통해 메모리 접근 시간을 줄일 수 있음.
+- 4단계 페이지 테이블을 사용하는 경우
+  - 메모리 접근 시간이 100ns, TLB 접근 시간이 20ns이고
+  - TLB hit ratio가 98%인 경우
+    - effective memory access time = 0.98 _ 120 + 0.02 _ 520 = 128 nanoseconds.
+- 결과적으로 주소변환을 위해 28ns만 소요
+
+### Memory Protection
+
+- Page table의 각 entry마다 아래의 bit를 둔다.
+
+  - Protection bit
+    - page에 대한 접근 권한 (read/write/read-only)
+  - Valid-invalid bit
+
+    - "valid"는 해당 주소의 frame에 그 프로세스를 구성하는 유효한 내용이 있음을 뜻함 (접근 허용)
+    - "invalid"는 해당 주소의 frame에 유효한 내용이 없음\*을 뜻함(접근 불허)
+
+    - "\*" i) 프로세스가 그 주소 부분을 사용하지 않는 경우
+    - "\*" ii) 해당 페이지가 메모리에 올라와 있지 않고 swap area에 있는 경우
+
+### Inverted Page Table
+
+- page table이 매우 큰 이유
+
+  - 모든 process별로 그 logical address에 대응하는 모든 page에 대해 page table entry가 존재.
+  - 대응하는 page가 메모리에 있든 아니든 간에 page table에는 entry로 존재
+
+- Inverted page table
+  - Page frame 하나당 page table에 하나의 entry를 둔 것 (system-wide)
+  - 각 page table entry는 각각의 물리적 메모리의 page frame이 담고 있는 내용 표시(process-id, process의 logical address)
+  - 단점
+    - 테이블 전체를 탐색해야함
+  - 조치
+    - associative register 사용 (expensive)
+
+### Shared Page
+
+- Shared code
+  - Re-entrant Code (=Pure code)
+  - read-only로 하여 프로세스 간에 하나의 code만 메모리에 올림(eg, text editors, compilers, window systems)
+  - Shared code는 모든 프로세스의 logical address space에서 동일한 위치 있어야함
+- Private code and data
+  - 각 프로세스들은 독자적으로 메모리에 올림
+  - Private data는 logical address space의 아무 곳에 와도 무방
+
+### Segmentation
+
+- 프로그램은 의미 단위인 여러 개의 segment로 구성
+  - 작게는 프로그램을 구성하는 함수 하나하나를 세그먼트로 정의
+  - 크게는 프로그램 전체를 하나의 세그먼트로 정의 가능
+  - 일반적으로는 code, data, stack 부분이 하나씩의 세그먼트로 정의됨
+- Segment는 다음과 같은 logical unit들임
+
+```c
+main(),
+function,
+global variables,
+stack,
+symbol table, arrays
+
+```
+
+### Segmentation Architecture
+
+- Logical address는 다음의 두 가지로 구성
+
+  - <segment-number, offset>
+
+- Segment table
+  - each table entry has:
+    - base - starting physical address of the segment
+    - limit - length of the segment
+- Segment-table base register(STBR)
+  - 물리적 메모리에서의 segment table의 위치
+- Segment-table length register(STLR)
+  - 프로그램이 사용하는 segment의 수
+    - segment number s is legal if s < STLR
+
+### Segmentation Architecture (Cont.)
+
+- Protection
+  - 각 세그먼트 별로 protection bit가 있음
+  - Each entry:
+    - Valid bit = 0 > illegal segment
+    - Read/Write/Execution 권한 bit
+- Sharing
+  - shared segment
+  - same segment number
+  - segment는 의미단위이기 때문에 공유(sharing)과 보안(protection)에 있어 paging보다 훨씬 효과적이다.
+- Allocation
+  - first fit / best fit
+  - external fragmentation 발생
+  - segment의 길이가 동일하지 않으므로 가변분할 방식에서와 동일한 문제점들이 발생
+
 ### 출처 : Kocw 이화여대 반효경 교수 "운영체제" 강의 첨부
 
 - http://www.kocw.net/home/search/kemView.do?kemId=1046323
